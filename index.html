@@ -14,6 +14,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
+@font-face {
+  font-family:'QingSongHandwriting';
+  src: url('https://cdn.jsdelivr.net/gh/max32002/JasonHandWritingFonts@20240409/webfont/JasonHandwriting1-Regular.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
 :root{
   --bg-page:#fff8f0;
   --bg-page-2:#fffdfa;
@@ -35,17 +41,17 @@ html,body{margin:0;padding:0;}
 body{
   background:var(--bg-page);
   color:var(--text-main);
-  font-family:'Nunito',sans-serif;
+  font-family:'QingSongHandwriting','Nunito',sans-serif;
   min-height:100vh;
   -webkit-tap-highlight-color:transparent;
   overflow-x:hidden;
   position:relative;
 }
 h1,h2,h3,.display{
-  font-family:'Baloo 2',sans-serif;
+  font-family:'QingSongHandwriting','Baloo 2',sans-serif;
   font-weight:700;
 }
-.mono{font-family:'JetBrains Mono',monospace;}
+.mono{font-family:'QingSongHandwriting','JetBrains Mono',monospace;}
 button{font-family:inherit;cursor:pointer;}
 input,textarea{font-family:inherit;}
 ::selection{background:var(--chip);color:var(--primary-deep);}
@@ -345,6 +351,15 @@ main{flex:1; padding:16px 16px 110px;}
 .modal-sheet h2{font-size:22px; color:var(--primary-deep); margin:0 0 14px;}
 
 .field{margin-bottom:14px;}
+.rating-picker{display:flex; gap:8px;}
+.rating-picker button{
+  flex:1; padding:10px 6px; border-radius:12px; border:1.5px solid var(--border-soft);
+  background:var(--card-white); color:var(--text-dim); font-size:14px; font-weight:700;
+  transition:all .15s;
+}
+.rating-picker button.active{
+  border-color:var(--primary); background:var(--primary); color:#fff;
+}
 .field label{
   display:block; font-size:12px; color:var(--text-dim);
   letter-spacing:.02em; margin-bottom:6px; font-weight:700;
@@ -432,10 +447,16 @@ main{flex:1; padding:16px 16px 110px;}
   width:32px;height:32px;border-radius:50%; font-size:16px; flex-shrink:0;
 }
 .detail-date{
-  display:inline-block;
+  display:inline-flex; align-items:center; gap:8px;
+  margin-bottom:14px;
+}
+.detail-date .date-chip{
   color:var(--primary-deep); background:var(--chip);
   font-size:12.5px; font-weight:700; padding:4px 12px; border-radius:999px;
-  margin-bottom:14px;
+}
+.detail-date .rating-chip{
+  font-size:12.5px; font-weight:700; padding:4px 12px; border-radius:999px;
+  background:var(--card-white); border:1.5px solid var(--border-soft); color:var(--text-main);
 }
 .detail-owner{
   display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); margin-bottom:14px;
@@ -706,6 +727,14 @@ main{
       <input type="date" id="input-date">
     </div>
     <div class="field">
+      <label>評價</label>
+      <div class="rating-picker" id="rating-picker">
+        <button type="button" data-rating="很可以">很可以</button>
+        <button type="button" data-rating="還行啦">還行啦</button>
+        <button type="button" data-rating="先不要">先不要</button>
+      </div>
+    </div>
+    <div class="field">
       <label>照片</label>
       <div class="photo-upload-row" id="photo-upload-row"></div>
       <input type="file" id="file-input" accept="image/*" multiple style="display:none">
@@ -736,7 +765,10 @@ main{
         <button class="close-x" id="detail-close-x">✕</button>
       </div>
     </div>
-    <div class="detail-date mono" id="detail-date"></div>
+    <div class="detail-date">
+      <span class="date-chip mono" id="detail-date"></span>
+      <span class="rating-chip" id="detail-rating" style="display:none;"></span>
+    </div>
     <div class="detail-owner" id="detail-owner"></div>
     <div class="detail-photos" id="detail-photos"></div>
     <div class="review-block" id="detail-review"></div>
@@ -1083,6 +1115,19 @@ const formTitle = $("#form-title-text");
 const titleInput = $("#input-title");
 const dateInput = $("#input-date");
 const reviewInput = $("#input-review");
+const ratingPicker = $("#rating-picker");
+let ratingValue = "";
+ratingPicker.querySelectorAll("button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    ratingValue = (ratingValue === btn.dataset.rating) ? "" : btn.dataset.rating;
+    renderRatingPicker();
+  });
+});
+function renderRatingPicker() {
+  ratingPicker.querySelectorAll("button").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.rating === ratingValue);
+  });
+}
 const photoRow = $("#photo-upload-row");
 const fileInput = $("#file-input");
 const deleteBtn = $("#delete-btn");
@@ -1096,6 +1141,8 @@ function openForm(movie = null) {
   titleInput.value = movie ? movie.title : "";
   dateInput.value = movie ? movie.watchDate : new Date().toISOString().slice(0, 10);
   reviewInput.value = movie ? (movie.review || "") : "";
+  ratingValue = movie ? (movie.rating || "") : "";
+  renderRatingPicker();
   existingPhotos = movie ? [...(movie.photos || [])] : [];
   pendingPhotos = [];
   deleteBtn.style.display = movie ? "block" : "none";
@@ -1206,10 +1253,10 @@ $("#form-save-btn").addEventListener("click", async () => {
   setLoading(true, "儲存中…");
   try {
     if (editingId) {
-      await updateDoc(doc(db, "movies", editingId), { title, watchDate, review, photos });
+      await updateDoc(doc(db, "movies", editingId), { title, watchDate, review, photos, rating: ratingValue });
     } else {
       await addDoc(collection(db, "movies"), {
-        title, watchDate, review, photos,
+        title, watchDate, review, photos, rating: ratingValue,
         createdBy: currentUser.uid,
         createdByName: currentUser.displayName || "",
         createdByPhoto: currentUser.photoURL || "",
@@ -1256,6 +1303,13 @@ function openDetail(id) {
 
   $("#detail-title-text").textContent = m.title;
   $("#detail-date").textContent = formatDate(m.watchDate);
+  const ratingEl = $("#detail-rating");
+  if (m.rating) {
+    ratingEl.textContent = m.rating;
+    ratingEl.style.display = "inline-block";
+  } else {
+    ratingEl.style.display = "none";
+  }
   $("#detail-owner").innerHTML = `<img src="${ownerAvatar}" alt=""> ${escapeHtml(ownerName)} 紀錄`;
 
   const photos = m.photos || [];
