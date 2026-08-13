@@ -506,13 +506,28 @@ main{flex:1; padding:calc(var(--topbar-h, 138px) + 14px) 16px 110px;}
   border:1px solid var(--border-soft);
 }
 .review-entry{
-  padding:14px 0;
-  border-top:1px solid var(--border-soft);
+  position:relative;
+  border:1.5px solid #b9d3ef;
+  border-radius:18px 21px 16px 23px / 20px 15px 23px 14px;
+  padding:18px 18px 16px;
+  margin:18px 3px 22px;
+  transform:rotate(-0.25deg);
 }
-.review-entry:first-child{border-top:none; padding-top:2px;}
+.review-entry:first-child{margin-top:6px;}
 .review-entry.empty{
-  color:var(--text-dim); font-style:italic; border-top:none; padding-top:2px;
+  color:var(--text-dim); font-style:italic;
+  border-style:dashed;
 }
+.review-entry .corner-mark{
+  position:absolute;
+  color:var(--primary);
+  font-size:15px;
+  line-height:1;
+  background:var(--bg-page-2);
+  padding:0 3px;
+}
+.review-entry .corner-tl{top:-9px; left:16px;}
+.review-entry .corner-br{bottom:-9px; right:16px;}
 .review-entry-head{
   display:flex; align-items:center; gap:7px;
   font-size:12.5px; font-weight:700; color:var(--primary-deep);
@@ -1406,11 +1421,13 @@ function openDetail(id) {
   } else {
     reviewEl.innerHTML = entries.map(({ uid, text }) => `
       <div class="review-entry">
+        <i class="bi bi-chevron-up corner-mark corner-tl"></i>
         <div class="review-entry-head">
           <img src="${displayAvatarFor(uid)}" alt="">
           <span>${escapeHtml(displayNameFor(uid))}</span>
         </div>
         <div class="review-entry-text">${escapeHtml(text)}</div>
+        <i class="bi bi-chevron-down corner-mark corner-br"></i>
       </div>
     `).join("");
   }
