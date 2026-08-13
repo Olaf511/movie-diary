@@ -360,6 +360,25 @@ main{flex:1; padding:16px 16px 110px;}
   outline:none;
 }
 .field input:focus, .field textarea:focus{border-color:var(--primary);}
+.field input[type=date]{
+  position:relative;
+  min-width:0;
+  -webkit-appearance:none;
+  appearance:none;
+}
+.field input[type=date]::-webkit-datetime-edit{
+  overflow:hidden;
+}
+.field input[type=date]::-webkit-calendar-picker-indicator{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  margin:0;
+  padding:0;
+  opacity:0;
+  cursor:pointer;
+}
 .field textarea{min-height:110px; resize:vertical; line-height:1.5;}
 
 .photo-upload-row{
@@ -426,8 +445,9 @@ main{flex:1; padding:16px 16px 110px;}
   display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:16px;
 }
 .detail-photos img{
-  width:120px; height:160px; object-fit:cover; border-radius:12px; flex-shrink:0;
+  width:84px; height:112px; object-fit:cover; border-radius:12px; flex-shrink:0;
   border:1px solid var(--border-soft);
+  cursor:pointer;
 }
 .review-block{
   background:var(--card-white);
@@ -548,18 +568,64 @@ main{
 }
 .icon-btn:active{transform:scale(.92);}
 
-/* review text with no box around it */
+/* review text wrapped in a hand-drawn wavy frame */
 .review-block{
-  background:none;
-  border:none;
-  padding:0;
-  border-radius:0;
+  background:var(--card-white);
+  border-style:solid;
+  border-width:12px;
+  border-image-source:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='18'%3E%3Cpath d='M0,9 Q8,-3 16,9 T32,9' stroke='%232f6fed' stroke-width='4.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  border-image-slice:9 16 fill;
+  border-image-repeat:round;
+  border-image-width:12px;
+  border-radius:18px;
+  padding:16px;
 }
 
 .photo-thumb .rm{
   background:rgba(15,26,46,.6);
 }
 .photo-thumb img{cursor:pointer;}
+
+/* ---------- PHOTO LIGHTBOX ---------- */
+#lightbox-modal{
+  display:none;
+  position:fixed; inset:0; z-index:300;
+  background:rgba(10,14,24,.94);
+  align-items:center; justify-content:center;
+  touch-action:pan-y;
+}
+#lightbox-modal.active{display:flex;}
+#lightbox-modal .lightbox-img-wrap{
+  width:100%; height:100%;
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+}
+#lightbox-modal img{
+  max-width:92vw; max-height:82vh; object-fit:contain; border-radius:12px;
+  user-select:none; -webkit-user-drag:none; pointer-events:none;
+}
+#lightbox-close{
+  position:fixed; top:calc(16px + env(safe-area-inset-top)); right:16px; z-index:310;
+  background:rgba(255,255,255,.15); border:none; color:#fff;
+  width:36px;height:36px;border-radius:50%; font-size:16px;
+  display:flex; align-items:center; justify-content:center;
+}
+.lightbox-nav{
+  position:fixed; top:50%; transform:translateY(-50%);
+  background:rgba(255,255,255,.15); border:none; color:#fff;
+  width:42px;height:42px;border-radius:50%; font-size:22px;
+  display:flex; align-items:center; justify-content:center;
+  z-index:310;
+}
+.lightbox-nav.prev{left:10px;}
+.lightbox-nav.next{right:10px;}
+#lightbox-counter{
+  position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%;
+  transform:translateX(-50%);
+  color:#fff; font-size:12.5px; font-weight:700;
+  background:rgba(255,255,255,.15); padding:5px 14px; border-radius:999px;
+  z-index:310;
+}
 
 /* ---------- IMAGE CROPPER ---------- */
 .crop-stage{
@@ -629,7 +695,6 @@ main{
     <div class="modal-handle"></div>
     <div class="detail-header">
       <h2 id="form-title-text">新增觀影紀錄</h2>
-      <button class="close-x" id="form-close-x">✕</button>
     </div>
 
     <div class="field">
@@ -676,6 +741,17 @@ main{
     <div class="detail-photos" id="detail-photos"></div>
     <div class="review-block" id="detail-review"></div>
   </div>
+</div>
+
+<!-- ============ PHOTO LIGHTBOX ============ -->
+<div id="lightbox-modal">
+  <button id="lightbox-close">✕</button>
+  <button class="lightbox-nav prev" id="lightbox-prev">‹</button>
+  <div class="lightbox-img-wrap">
+    <img id="lightbox-img" src="" alt="">
+  </div>
+  <button class="lightbox-nav next" id="lightbox-next">›</button>
+  <div id="lightbox-counter"></div>
 </div>
 
 <!-- ============ PROFILE EDIT MODAL ============ -->
@@ -1013,7 +1089,6 @@ const deleteBtn = $("#delete-btn");
 
 $("#fab-add").addEventListener("click", () => openForm());
 $("#form-cancel-btn").addEventListener("click", closeForm);
-$("#form-close-x").addEventListener("click", closeForm);
 
 function openForm(movie = null) {
   editingId = movie ? movie.id : null;
@@ -1183,11 +1258,15 @@ function openDetail(id) {
   $("#detail-date").textContent = formatDate(m.watchDate);
   $("#detail-owner").innerHTML = `<img src="${ownerAvatar}" alt=""> ${escapeHtml(ownerName)} 紀錄`;
 
-  const photosHtml = (m.photos && m.photos.length)
-    ? m.photos.map(u => `<img src="${u}" alt="">`).join("")
+  const photos = m.photos || [];
+  const photosHtml = photos.length
+    ? photos.map((u, i) => `<img src="${u}" alt="" data-idx="${i}">`).join("")
     : "";
   $("#detail-photos").innerHTML = photosHtml;
   $("#detail-photos").style.display = photosHtml ? "flex" : "none";
+  $("#detail-photos").querySelectorAll("img").forEach(imgEl => {
+    imgEl.addEventListener("click", () => openLightbox(photos, Number(imgEl.dataset.idx)));
+  });
 
   const reviewEl = $("#detail-review");
   if (m.review) {
@@ -1205,6 +1284,64 @@ function openDetail(id) {
 function closeDetail() {
   detailModal.classList.remove("active");
 }
+
+// ================= PHOTO LIGHTBOX =================
+const lightboxModal = $("#lightbox-modal");
+const lightboxImg = $("#lightbox-img");
+const lightboxCounter = $("#lightbox-counter");
+const lightboxPrevBtn = $("#lightbox-prev");
+const lightboxNextBtn = $("#lightbox-next");
+let lbPhotos = [];
+let lbIndex = 0;
+
+function openLightbox(photos, idx) {
+  if (!photos || !photos.length) return;
+  lbPhotos = photos;
+  lbIndex = idx;
+  renderLightbox();
+  lightboxModal.classList.add("active");
+}
+function closeLightbox() {
+  lightboxModal.classList.remove("active");
+}
+function renderLightbox() {
+  lightboxImg.src = lbPhotos[lbIndex];
+  const multi = lbPhotos.length > 1;
+  lightboxPrevBtn.style.display = multi ? "flex" : "none";
+  lightboxNextBtn.style.display = multi ? "flex" : "none";
+  lightboxCounter.style.display = multi ? "block" : "none";
+  lightboxCounter.textContent = `${lbIndex + 1} / ${lbPhotos.length}`;
+}
+function lightboxPrev() {
+  if (!lbPhotos.length) return;
+  lbIndex = (lbIndex - 1 + lbPhotos.length) % lbPhotos.length;
+  renderLightbox();
+}
+function lightboxNext() {
+  if (!lbPhotos.length) return;
+  lbIndex = (lbIndex + 1) % lbPhotos.length;
+  renderLightbox();
+}
+$("#lightbox-close").addEventListener("click", closeLightbox);
+lightboxPrevBtn.addEventListener("click", lightboxPrev);
+lightboxNextBtn.addEventListener("click", lightboxNext);
+lightboxModal.addEventListener("click", (e) => {
+  if (e.target === lightboxModal) closeLightbox();
+});
+
+let lbTouchStartX = 0;
+let lbTouchStartY = 0;
+lightboxModal.addEventListener("touchstart", (e) => {
+  lbTouchStartX = e.changedTouches[0].clientX;
+  lbTouchStartY = e.changedTouches[0].clientY;
+}, { passive: true });
+lightboxModal.addEventListener("touchend", (e) => {
+  const dx = e.changedTouches[0].clientX - lbTouchStartX;
+  const dy = e.changedTouches[0].clientY - lbTouchStartY;
+  if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+    if (dx > 0) lightboxPrev(); else lightboxNext();
+  }
+}, { passive: true });
 
 // ================= HELPERS =================
 function fileToDataUrl(file) {
