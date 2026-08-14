@@ -604,6 +604,22 @@ input[type="date"]{
   color:var(--primary-deep); background:var(--chip);
   font-size:12.5px; font-weight:700; padding:4px 12px; border-radius:999px;
 }
+
+/* star rating (per-person): 很可以=filled, 還行啦=half, 先不要=outline, all in #FFFFCC */
+.star-icon{
+  color:#FFFFCC;
+  filter:drop-shadow(0 0 1px rgba(0,0,0,.35));
+}
+.rating-chip{display:inline-flex; align-items:center; justify-content:center; gap:5px;}
+.rating-chip .star-icon{font-size:14px;}
+
+.review-entry-head .star-icon{margin-left:auto; font-size:15px;}
+.review-entry-text.empty{color:var(--text-dim); font-style:italic;}
+
+.card-rating-row{display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 2px;}
+.card-rating-pair{display:inline-flex; align-items:center; gap:3px;}
+.card-rating-pair img{width:16px; height:16px; border-radius:50%; object-fit:cover; flex-shrink:0;}
+.card-rating-pair .star-icon{font-size:13px;}
 </style>
 </head>
 <body>
@@ -662,12 +678,11 @@ input[type="date"]{
     <div class="modal-handle"></div>
     <div class="detail-header">
       <h2 id="form-title-text">新增觀影紀錄</h2>
-      <button class="close-x" id="form-close-x">✕</button>
     </div>
 
     <div class="field">
       <label>電影名稱</label>
-      <input type="text" id="input-title" placeholder="例如：花樣年華">
+      <input type="text" id="input-title" placeholder="例如：夫夫">
     </div>
     <div class="field">
       <label>觀看日期</label>
@@ -676,13 +691,13 @@ input[type="date"]{
     <div class="field">
       <label>觀後感覺</label>
       <div class="rating-row" id="rating-row">
-        <button type="button" class="rating-chip" data-rating="很可以">很可以</button>
-        <button type="button" class="rating-chip" data-rating="還行啦">還行啦</button>
-        <button type="button" class="rating-chip" data-rating="先不要">先不要</button>
+        <button type="button" class="rating-chip" data-rating="很可以"><i class="bi bi-star-fill star-icon"></i> 很可以</button>
+        <button type="button" class="rating-chip" data-rating="還行啦"><i class="bi bi-star-half star-icon"></i> 還行啦</button>
+        <button type="button" class="rating-chip" data-rating="先不要"><i class="bi bi-star star-icon"></i> 先不要</button>
       </div>
     </div>
     <div class="field">
-      <label>照片（海報、票根都可以）</label>
+      <label>照片</label>
       <div class="photo-upload-row" id="photo-upload-row"></div>
       <input type="file" id="file-input" accept="image/*" multiple style="display:none">
     </div>
@@ -712,10 +727,7 @@ input[type="date"]{
         <button class="icon-btn close-x" id="detail-close-x">✕</button>
       </div>
     </div>
-    <div class="detail-date-row">
-      <div class="detail-date mono" id="detail-date"></div>
-      <div class="detail-rating-chip" id="detail-rating" style="display:none;"></div>
-    </div>
+    <div class="detail-date mono" id="detail-date"></div>
     <div class="detail-owner" id="detail-owner"></div>
     <div class="detail-photos" id="detail-photos"></div>
     <div class="review-block" id="detail-review"></div>
@@ -966,9 +978,28 @@ function listenToProfiles() {
   onSnapshot(collection(db, "profiles"), (snap) => {
     profileMap = {};
     snap.docs.forEach(d => { profileMap[d.id] = d.data(); });
+    ensureMyProfileExists();
     renderUserChip();
     render(); // re-render movie cards/list so owner tags pick up new nicknames
   }, (err) => console.error(err));
+}
+
+// 第一次登入時，自動把 Google 的名字/頭像存成大家都看得到的預設值，
+// 這樣別人不會看到「匿名影迷」，除非本人自己想維持匿名。
+let myProfileEnsured = false;
+async function ensureMyProfileExists() {
+  if (myProfileEnsured) return;
+  if (profileMap[currentUser.uid]) { myProfileEnsured = true; return; }
+  myProfileEnsured = true;
+  try {
+    await setDoc(doc(db, "profiles", currentUser.uid), {
+      nickname: currentUser.displayName || "匿名影迷",
+      avatarUrl: currentUser.photoURL || "",
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 const profileModal = $("#profile-modal");
@@ -1085,6 +1116,39 @@ function render() {
   contentEl.querySelectorAll("[data-open-id]").forEach(el => {
     el.addEventListener("click", () => openDetail(el.dataset.openId));
   });
+
+  requestAnimationFrame(autoFitTitles);
+}
+
+function autoFitTitles() {
+  contentEl.querySelectorAll(".movie-title, .list-row .meta .t").forEach(el => {
+    el.style.fontSize = "";
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    const minSize = 11;
+    let guard = 0;
+    while (el.scrollWidth > el.clientWidth + 0.5 && size > minSize && guard < 30) {
+      size -= 0.5;
+      el.style.fontSize = size + "px";
+      guard++;
+    }
+  });
+}
+
+const RATING_ICON = { "很可以": "bi-star-fill", "還行啦": "bi-star-half", "先不要": "bi-star" };
+function ratingIconHtml(rating) {
+  const cls = RATING_ICON[rating];
+  return cls ? `<i class="bi ${cls} star-icon"></i>` : "";
+}
+function ratingsOf(m) {
+  return m.ratings || (m.rating ? { [m.createdBy]: m.rating } : {});
+}
+function cardRatingRowHtml(m) {
+  const ratings = ratingsOf(m);
+  const uids = Object.keys(ratings);
+  if (!uids.length) return "";
+  return `<div class="card-rating-row">${uids.map(uid => `
+    <span class="card-rating-pair"><img src="${displayAvatarFor(uid)}" alt="">${ratingIconHtml(ratings[uid])}</span>
+  `).join("")}</div>`;
 }
 
 function cardHtml(m) {
@@ -1096,6 +1160,7 @@ function cardHtml(m) {
       ${cover}
       <div class="info">
         <div class="movie-title">${escapeHtml(m.title)}</div>
+        ${cardRatingRowHtml(m)}
         <div class="movie-date mono">${formatDate(m.watchDate)}</div>
       </div>
     </div>`;
@@ -1145,12 +1210,16 @@ const deleteBtn = $("#delete-btn");
 
 $("#fab-add").addEventListener("click", () => openForm());
 $("#form-cancel-btn").addEventListener("click", closeForm);
-$("#form-close-x").addEventListener("click", closeForm);
 
 function getMyReviewText(movie) {
   if (movie.reviews && movie.reviews[currentUser.uid]) return movie.reviews[currentUser.uid].text || "";
   if (movie.review && movie.createdBy === currentUser.uid) return movie.review; // legacy single-review docs
   return "";
+}
+function getMyRating(movie) {
+  if (movie.ratings && movie.ratings[currentUser.uid]) return movie.ratings[currentUser.uid];
+  if (movie.rating && movie.createdBy === currentUser.uid) return movie.rating; // legacy single-rating docs
+  return null;
 }
 
 function openForm(movie = null) {
@@ -1158,7 +1227,7 @@ function openForm(movie = null) {
   formTitle.textContent = movie ? "編輯紀錄" : "新增觀影紀錄";
   titleInput.value = movie ? movie.title : "";
   dateInput.value = movie ? movie.watchDate : new Date().toISOString().slice(0, 10);
-  selectedRating = movie ? (movie.rating || null) : null;
+  selectedRating = movie ? getMyRating(movie) : null;
   renderRatingRow();
   reviewInput.value = movie ? getMyReviewText(movie) : "";
   existingPhotos = movie ? [...(movie.photos || [])] : [];
@@ -1257,8 +1326,8 @@ function processNextCrop() {
   const reader = new FileReader();
   reader.onload = (e) => {
     cropImg.onload = () => {
-      initCropState();
       cropModal.classList.add("active");
+      requestAnimationFrame(() => { initCropState(); });
     };
     cropImg.src = e.target.result;
   };
@@ -1268,6 +1337,11 @@ function processNextCrop() {
 
 function initCropState() {
   const vpRect = cropViewport.getBoundingClientRect();
+  if (vpRect.width < 1 || vpRect.height < 1) {
+    // viewport not laid out yet — try again next frame
+    requestAnimationFrame(initCropState);
+    return;
+  }
   const nw = cropImg.naturalWidth, nh = cropImg.naturalHeight;
   const baseScale = Math.max(vpRect.width / nw, vpRect.height / nh);
   cropState = { nw, nh, vpW: vpRect.width, vpH: vpRect.height, baseScale, scale: 1, tx: 0, ty: 0 };
@@ -1393,16 +1467,18 @@ $("#form-save-btn").addEventListener("click", async () => {
   setLoading(true, "儲存中…");
   try {
     if (editingId) {
-      const payload = { title, watchDate, photos, rating: selectedRating };
-      // 只更新「我自己」那份心得，用 dot-path 寫入 map 欄位，不會動到別人寫的內容
+      const payload = { title, watchDate, photos };
+      // 只更新「我自己」那份心得／評價，用 dot-path 寫入 map 欄位，不會動到別人寫的內容
       payload[`reviews.${currentUser.uid}`] = review
         ? { text: review, updatedAt: serverTimestamp() }
         : deleteField();
+      payload[`ratings.${currentUser.uid}`] = selectedRating ? selectedRating : deleteField();
       await updateDoc(doc(db, "movies", editingId), payload);
     } else {
       await addDoc(collection(db, "movies"), {
-        title, watchDate, photos, rating: selectedRating,
+        title, watchDate, photos,
         reviews: review ? { [currentUser.uid]: { text: review, updatedAt: serverTimestamp() } } : {},
+        ratings: selectedRating ? { [currentUser.uid]: selectedRating } : {},
         createdBy: currentUser.uid,
         createdByName: currentUser.displayName || "",
         createdByPhoto: currentUser.photoURL || "",
@@ -1442,15 +1518,22 @@ $("#detail-close-x").addEventListener("click", closeDetail);
 
 function getReviewEntries(m) {
   const entries = [];
+  const seen = new Set();
+  const ratings = ratingsOf(m);
   if (m.reviews) {
     Object.entries(m.reviews).forEach(([uid, r]) => {
-      if (r && r.text) entries.push({ uid, text: r.text });
+      if (r && r.text) { entries.push({ uid, text: r.text, rating: ratings[uid] || null }); seen.add(uid); }
     });
   }
   // legacy fallback for movies saved before per-person reviews existed
   if (m.review && !(m.reviews && m.reviews[m.createdBy])) {
-    entries.push({ uid: m.createdBy, text: m.review });
+    entries.push({ uid: m.createdBy, text: m.review, rating: ratings[m.createdBy] || null });
+    seen.add(m.createdBy);
   }
+  // people who only left a rating without writing a review yet
+  Object.keys(ratings).forEach(uid => {
+    if (!seen.has(uid)) entries.push({ uid, text: "", rating: ratings[uid] });
+  });
   return entries;
 }
 
@@ -1484,14 +1567,15 @@ function openDetail(id) {
   if (entries.length === 0) {
     reviewEl.innerHTML = `<div class="review-entry empty">還沒有人寫下心得。</div>`;
   } else {
-    reviewEl.innerHTML = entries.map(({ uid, text }) => `
+    reviewEl.innerHTML = entries.map(({ uid, text, rating }) => `
       <div class="review-entry">
         <i class="bi bi-chevron-up corner-mark corner-tl"></i>
         <div class="review-entry-head">
           <img src="${displayAvatarFor(uid)}" alt="">
           <span>${escapeHtml(displayNameFor(uid))}</span>
+          ${ratingIconHtml(rating)}
         </div>
-        <div class="review-entry-text">${escapeHtml(text)}</div>
+        <div class="review-entry-text${text ? "" : " empty"}">${text ? escapeHtml(text) : "還沒有寫下文字心得"}</div>
         <i class="bi bi-chevron-down corner-mark corner-br"></i>
       </div>
     `).join("");
@@ -1517,6 +1601,29 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
 }
+
+// ================= CLICK OUTSIDE TO CLOSE =================
+function cancelCropQueue() {
+  cropQueue = [];
+  cropModal.classList.remove("active");
+  const cb = cropOnDone;
+  cropOnDone = null;
+  if (cb) cb(cropAllResults);
+}
+const modalCloseHandlers = {
+  "form-modal": closeForm,
+  "detail-modal": closeDetail,
+  "profile-modal": () => profileModal.classList.remove("active"),
+  "crop-modal": cancelCropQueue
+};
+document.querySelectorAll(".modal-overlay").forEach(overlay => {
+  overlay.addEventListener("click", (e) => {
+    if (e.target !== overlay) return; // only when clicking the backdrop itself, not the sheet
+    const handler = modalCloseHandlers[overlay.id];
+    if (handler) handler();
+    else overlay.classList.remove("active");
+  });
+});
 
 </script>
 </body>
