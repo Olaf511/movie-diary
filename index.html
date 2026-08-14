@@ -608,10 +608,10 @@ input[type="date"]{
   font-size:12.5px; font-weight:700; padding:4px 12px; border-radius:999px;
 }
 
-/* star rating (per-person): 很可以=filled, 還行啦=half, 先不要=outline, all in #FFFFCC */
+/* star rating (per-person): 很可以=filled, 還行啦=half, 先不要=outline */
 .star-icon{
-  color:#FFFFCC;
-  filter:drop-shadow(0 0 1px rgba(0,0,0,.35));
+  color:#E3B341;
+  filter:drop-shadow(0 0 1px rgba(0,0,0,.2));
 }
 .rating-chip{display:inline-flex; align-items:center; justify-content:center; gap:5px;}
 .rating-chip .star-icon{font-size:14px;}
@@ -1549,14 +1549,6 @@ function openDetail(id) {
 
   $("#detail-title-text").textContent = m.title;
   $("#detail-date").textContent = formatDate(m.watchDate);
-  const ratingEl = $("#detail-rating");
-  if (m.rating) {
-    ratingEl.textContent = m.rating;
-    ratingEl.style.display = "inline-block";
-  } else {
-    ratingEl.textContent = "";
-    ratingEl.style.display = "none";
-  }
   $("#detail-owner").innerHTML = `<img src="${ownerAvatar}" alt=""> ${escapeHtml(ownerName)} 新增`;
 
   const photosHtml = (m.photos && m.photos.length)
