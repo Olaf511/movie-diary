@@ -623,6 +623,8 @@ input[type="date"]{
 .card-rating-pair{display:inline-flex; align-items:center; gap:3px;}
 .card-rating-pair img{width:16px; height:16px; border-radius:50%; object-fit:cover; flex-shrink:0;}
 .card-rating-pair .star-icon{font-size:13px;}
+.confirm-sheet{max-width:320px; text-align:center; padding:26px 22px 20px;}
+.confirm-message{font-size:15px; color:var(--text-main); line-height:1.6; margin:4px 0 18px;}
 </style>
 </head>
 <body>
@@ -659,7 +661,7 @@ input[type="date"]{
     </div>
     <div class="view-toggle">
       <button id="view-grid-btn" class="active">海報牆</button>
-      <button id="view-list-btn">總覽（依日期）</button>
+      <button id="view-list-btn">總覽</button>
     </div>
   </div>
 
@@ -788,6 +790,17 @@ input[type="date"]{
   </div>
 </div>
 
+<!-- ============ CONFIRM MODAL ============ -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-sheet confirm-sheet">
+    <p class="confirm-message" id="confirm-message">確定要刪除這筆觀影紀錄嗎？</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="confirm-cancel-btn">取消</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">確定刪除</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ LOADING / TOAST ============ -->
 <div class="loading-overlay" id="loading-overlay">
   <div class="spinner"></div>
@@ -863,6 +876,8 @@ onAuthStateChanged(auth, (user) => {
       listenToMovies();
       requestAnimationFrame(updateTopbarHeight);
     } else {
+      if (unsubMovies) { unsubMovies(); unsubMovies = null; }
+      if (unsubProfiles) { unsubProfiles(); unsubProfiles = null; }
       loginScreen.classList.remove("hidden");
       appScreen.classList.remove("active");
     }
@@ -977,8 +992,9 @@ function renderUserChip() {
 }
 
 // ================= PROFILES (custom nickname / avatar) =================
+let unsubProfiles = null;
 function listenToProfiles() {
-  onSnapshot(collection(db, "profiles"), (snap) => {
+  unsubProfiles = onSnapshot(collection(db, "profiles"), (snap) => {
     profileMap = {};
     snap.docs.forEach(d => { profileMap[d.id] = d.data(); });
     ensureMyProfileExists();
@@ -1052,14 +1068,15 @@ $("#profile-save-btn").addEventListener("click", async () => {
 });
 
 // ================= FIRESTORE LISTENER =================
+let unsubMovies = null;
 function listenToMovies() {
   const q = query(collection(db, "movies"), orderBy("watchDate", "desc"));
-  onSnapshot(q, (snap) => {
+  unsubMovies = onSnapshot(q, (snap) => {
     allMovies = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     render();
   }, (err) => {
+    // 登出時舊的監聽器會因為權限被拒而觸發這裡，屬正常現象，不用跳訊息嚇使用者
     console.error(err);
-    showToast("讀取資料失敗，請檢查 Firestore 設定");
   });
 }
 
@@ -1498,9 +1515,26 @@ $("#form-save-btn").addEventListener("click", async () => {
   }
 });
 
+const confirmModal = $("#confirm-modal");
+const confirmMessageEl = $("#confirm-message");
+const confirmCancelBtn = $("#confirm-cancel-btn");
+const confirmOkBtn = $("#confirm-ok-btn");
+let confirmResolve = null;
+function askConfirm(message) {
+  confirmMessageEl.textContent = message;
+  confirmModal.classList.add("active");
+  return new Promise(resolve => { confirmResolve = resolve; });
+}
+function closeConfirm(result) {
+  confirmModal.classList.remove("active");
+  if (confirmResolve) { const r = confirmResolve; confirmResolve = null; r(result); }
+}
+confirmCancelBtn.addEventListener("click", () => closeConfirm(false));
+confirmOkBtn.addEventListener("click", () => closeConfirm(true));
+
 deleteBtn.addEventListener("click", async () => {
   if (!editingId) return;
-  if (!confirm("確定要刪除這筆觀影紀錄嗎？")) return;
+  if (!(await askConfirm("確定要刪除這筆觀影紀錄嗎？"))) return;
   setLoading(true, "刪除中…");
   try {
     await deleteDoc(doc(db, "movies", editingId));
