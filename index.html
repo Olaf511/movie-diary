@@ -1646,7 +1646,7 @@ function openDetail(id) {
           ${rating ? `<span class="entry-rating">${ratingIconHtml(rating)}${escapeHtml(rating)}</span>` : ""}
         </div>
         <div class="review-entry-text${text ? "" : " empty"}">${text ? escapeHtml(text) : "還沒有寫下文字心得"}</div>
-        ${dateStr ? `<div class="review-entry-date">更新於 ${dateStr}</div>` : ""}
+        ${dateStr ? `<div class="review-entry-date">記於 ${dateStr}</div>` : ""}
         <i class="bi bi-chevron-down corner-mark corner-br"></i>
       </div>
     `;
