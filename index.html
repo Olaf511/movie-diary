@@ -484,23 +484,38 @@ main{flex:1; padding:calc(var(--topbar-h, 138px) + 14px) 16px 110px;}
 .btn:active{transform:scale(.97);}
 
 /* ---------- DETAIL MODAL ---------- */
-#detail-modal .detail-header{
+.modal-sheet.detail-sheet{
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  padding-bottom:0;
+}
+.modal-sheet.detail-sheet .detail-header,
+.modal-sheet.detail-sheet .detail-date,
+.modal-sheet.detail-sheet .modal-handle{
+  flex-shrink:0;
+}
+.detail-scroll-body{
+  overflow-y:auto;
+  flex:1;
+  min-height:0;
+  padding-bottom:22px;
+}
+.detail-header h2{margin-bottom:2px; padding-right:8px;}
+.detail-header{
   display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:4px;
 }
-#detail-modal h2{margin-bottom:2px; padding-right:8px;}
 .detail-header-actions{
   display:flex; gap:8px; flex-shrink:0;
 }
-#detail-modal .icon-btn{
+.icon-btn{
   background:var(--card-white); border:1px solid var(--border-soft); color:var(--text-main);
   width:32px;height:32px;border-radius:50%; font-size:15px; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
 }
-#detail-modal .icon-btn.edit-btn{color:var(--primary-deep);}
-#detail-modal .close-x{
-  background:var(--card-white); border:1px solid var(--border-soft); color:var(--text-main);
-  width:32px;height:32px;border-radius:50%; font-size:16px; flex-shrink:0;
-}
+.icon-btn.edit-btn{color:var(--primary-deep);}
+.icon-btn.danger-btn{color:#c0392b; background:#fdeeee; border-color:#f6d2d2;}
+.icon-btn.close-x{font-size:16px;}
 .detail-date{
   display:inline-block;
   color:var(--primary-deep); background:var(--chip);
@@ -517,6 +532,25 @@ main{flex:1; padding:calc(var(--topbar-h, 138px) + 14px) 16px 110px;}
 .detail-photos img{
   width:120px; height:160px; object-fit:cover; border-radius:12px; flex-shrink:0;
   border:1px solid var(--border-soft);
+  cursor:zoom-in;
+}
+
+/* ---------- LIGHTBOX (tap a photo to enlarge) ---------- */
+.lightbox-overlay{
+  background:rgba(10,14,20,.94) !important;
+  padding:16px !important;
+}
+.lightbox-overlay img{
+  max-width:100%; max-height:85vh;
+  object-fit:contain;
+  border-radius:10px;
+  touch-action:pinch-zoom;
+}
+.lightbox-close{
+  position:absolute; top:18px; right:18px;
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(255,255,255,.15); color:#fff; border:none;
+  font-size:16px; display:flex; align-items:center; justify-content:center;
 }
 .review-entry{
   position:relative;
@@ -703,6 +737,9 @@ input[type="date"]{
     <div class="modal-handle"></div>
     <div class="detail-header">
       <h2 id="form-title-text">收藏片刻</h2>
+      <div class="detail-header-actions">
+        <button class="icon-btn danger-btn" id="delete-btn" title="刪除這筆紀錄" style="display:none;"><i class="bi bi-trash3"></i></button>
+      </div>
     </div>
 
     <div class="field">
@@ -735,15 +772,12 @@ input[type="date"]{
       <button class="btn btn-ghost" id="form-cancel-btn">取消</button>
       <button class="btn btn-primary" id="form-save-btn">儲存</button>
     </div>
-    <div class="modal-actions" style="margin-top:8px;">
-      <button class="btn btn-danger" id="delete-btn" style="display:none;">刪除這筆紀錄</button>
-    </div>
   </div>
 </div>
 
 <!-- ============ DETAIL MODAL ============ -->
 <div class="modal-overlay" id="detail-modal">
-  <div class="modal-sheet">
+  <div class="modal-sheet detail-sheet">
     <div class="modal-handle"></div>
     <div class="detail-header">
       <h2 id="detail-title-text"></h2>
@@ -753,10 +787,18 @@ input[type="date"]{
       </div>
     </div>
     <div class="detail-date mono" id="detail-date"></div>
-    <div class="detail-owner" id="detail-owner"></div>
-    <div class="detail-photos" id="detail-photos"></div>
-    <div class="review-block" id="detail-review"></div>
+    <div class="detail-scroll-body">
+      <div class="detail-owner" id="detail-owner"></div>
+      <div class="detail-photos" id="detail-photos"></div>
+      <div class="review-block" id="detail-review"></div>
+    </div>
   </div>
+</div>
+
+<!-- ============ LIGHTBOX ============ -->
+<div class="modal-overlay lightbox-overlay" id="lightbox-overlay">
+  <button class="lightbox-close" id="lightbox-close-btn">✕</button>
+  <img id="lightbox-img" src="" alt="">
 </div>
 
 <!-- ============ PROFILE EDIT MODAL ============ -->
@@ -765,7 +807,7 @@ input[type="date"]{
     <div class="modal-handle"></div>
     <div class="detail-header">
       <h2>編輯個人資料</h2>
-      <button class="close-x" id="profile-close-x">✕</button>
+      <button class="icon-btn close-x" id="profile-close-x">✕</button>
     </div>
 
     <div class="field" style="text-align:center;">
@@ -1278,7 +1320,7 @@ function openForm(movie = null) {
   reviewInput.value = movie ? getMyReviewText(movie) : "";
   existingPhotos = movie ? [...(movie.photos || [])] : [];
   pendingPhotos = [];
-  deleteBtn.style.display = movie ? "block" : "none";
+  deleteBtn.style.display = movie ? "flex" : "none";
   renderPhotoRow();
   formModal.classList.add("active");
 }
@@ -1629,6 +1671,9 @@ function openDetail(id) {
     : "";
   $("#detail-photos").innerHTML = photosHtml;
   $("#detail-photos").style.display = photosHtml ? "flex" : "none";
+  $("#detail-photos").querySelectorAll("img").forEach(img => {
+    img.addEventListener("click", () => openLightbox(img.src));
+  });
 
   const reviewEl = $("#detail-review");
   const entries = getReviewEntries(m);
@@ -1664,6 +1709,18 @@ function openDetail(id) {
 function closeDetail() {
   detailModal.classList.remove("active");
 }
+
+// ================= LIGHTBOX (tap a photo to enlarge) =================
+const lightboxOverlay = $("#lightbox-overlay");
+const lightboxImg = $("#lightbox-img");
+function openLightbox(src) {
+  lightboxImg.src = src;
+  lightboxOverlay.classList.add("active");
+}
+function closeLightbox() {
+  lightboxOverlay.classList.remove("active");
+}
+$("#lightbox-close-btn").addEventListener("click", closeLightbox);
 
 // ================= UTIL =================
 function setLoading(on, msg = "處理中…") {
