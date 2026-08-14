@@ -515,7 +515,10 @@ main{flex:1; padding:calc(var(--topbar-h, 138px) + 14px) 16px 110px;}
   padding:18px 18px 16px;
   margin:18px 3px 22px;
   transform:rotate(-0.25deg);
+  cursor:pointer;
+  transition:transform .12s ease;
 }
+.review-entry:active{transform:rotate(-0.25deg) scale(.97);}
 .review-entry:first-child{margin-top:6px;}
 .review-entry.empty{
   color:var(--text-dim); font-style:italic;
@@ -1580,6 +1583,10 @@ function openDetail(id) {
       </div>
     `).join("");
   }
+  // tap a 心得小卡 (or the empty placeholder) to jump straight into editing
+  reviewEl.querySelectorAll(".review-entry").forEach(card => {
+    card.addEventListener("click", () => { closeDetail(); openForm(m); });
+  });
 
   $("#detail-edit-btn").onclick = () => { closeDetail(); openForm(m); };
 
